@@ -35,7 +35,6 @@ def power_freq(freq):
     return math.floor(math.log10(freq)) 
 
 #Finding the GBF/Oscilloscope port
-
 def find_port(instr_name):
     rm = pyvisa.ResourceManager()  # Assure-toi d'avoir bien importé pyvisa
     available_ports = rm.list_resources()  # Stocker la liste dans une variable locale
@@ -71,6 +70,7 @@ def log_list(freq_inf, freq_sup):
             
     return loglist
 
+#Measuring the in/out voltage
 def measure_volt():
     try_count=0
     while try_count < 20:
@@ -96,6 +96,7 @@ def measure_volt():
              try_count+=1
     return volt_in, volt_out
 
+#Measuring the phase
 def measure_phase():
     try_count=0
     while try_count < 20:
@@ -111,16 +112,11 @@ def measure_phase():
             try_count+=1
     return phase 
 
-
-    
-
-#Creating the gain list
+#Main function; Executes the sweep and measures the gain and phase for each frequency
 def gain_list(freq_inf, freq_sup, amplitude):
     
     oscillo.write('CHAN1:SCAL {}'.format(amplitude/3))
     oscillo.write('CHAN2:SCAL {}'.format(amplitude/3))
-        
-    
     gbf.write(':SOUR1:VOLT {}'.format(amplitude))
 
     while True:
@@ -132,7 +128,6 @@ def gain_list(freq_inf, freq_sup, amplitude):
         
     oscillo.write(':ACQUIRE:AVERAGE 8')
     freq_list = log_list(freq_inf, freq_sup) #Create the frequency log list for the inf and sup frequencies
-    
     
     gbf.write('SOUR1:FREQ {}'.format(freq_inf)) #set frequency
     oscillo.write('autoset')
@@ -151,25 +146,14 @@ def gain_list(freq_inf, freq_sup, amplitude):
         current_power = power_freq(frequency)
         
         if current_power != previous_power:
-            
             oscillo.write(f':TIMebase:SCALe 5E-{current_power+1}')
             previous_power = current_power
-            
-            
     
         oscillo.write(':TRIGger:SOURce CH1') 
-            
-            
-            
         oscillo.write(':CHANnel1:POSition 0')
         oscillo.write(':CHANnel2:POSition 0')
-        #oscillo.write(':TIMebase:SCALe {}'.format(0.5*(frequency)**-1))
         oscillo.write(':MEASure:SOURce1 CH1')
-        
-            
-           
         amp1, amp2 = measure_volt()
-        
         oscillo.write('CHAN1:SCAL {}'.format(amp1/3))
         oscillo.write('CHAN2:SCAL {}'.format(amp2/3))
             
@@ -179,13 +163,12 @@ def gain_list(freq_inf, freq_sup, amplitude):
             time.sleep(1)  
       
         phase_list.append(measure_phase())
-        gain_list.append(gain_meas(frequency)) #For each frequency, measure and stock the gain
+        gain_list.append(gain_meas(frequency)) 
         print(frequency, gain_meas(frequency))
-        
-      
         
     return freq_list, gain_list, phase_list
 
+#Saving the data into a new file; the file will be created in txt format in the folder containing this script
 def save_file(freq_list, gain_list, phase_list):
     
   try:
@@ -193,26 +176,27 @@ def save_file(freq_list, gain_list, phase_list):
       nom_fichier = input("File name : (extension .txt) :\n")
       if not (nom_fichier.endswith(".txt")): #Si le nom ne finit pas par .txt
         nom_fichier+=".txt"
-        print("L'extension .txt a été ajouté automatiquement")
+        print("The .txt extension was added automatically\n")
               
       with open(nom_fichier, 'a') as fichier:
-        fichier.write("#La premiere colonne correspond aux longueurs d'onde et la deuxieme colonne correspond aux intensités.\n#Voici les mesures pour l'intervalle specifié\n>>>>>>>>>>>>>Debut<<<<<<<<<<<<<<\n")
+        fichier.write("#First column represents the frequency, second column represents the gain\n#Gain data\n>>>>>>>>>>>>>Begin<<<<<<<<<<<<<<\n")
       
         for frequency, gain in zip(freq_list, gain_list):
             fichier.write("{} {}\n".format(frequency, gain))
           
-        fichier.write(">>>>>>>>>>>>>Fin<<<<<<<<<<<<<<\n\n#Voici les informations des pics trouvés\n>>>>>>>>>>>>>Debut<<<<<<<<<<<<<<\n")
+        fichier.write(">>>>>>>>>>>>>End<<<<<<<<<<<<<<\n\n#Phase data\n>>>>>>>>>>>>>Begin<<<<<<<<<<<<<<\n")
     
         for frequency, phase in zip(freq_list, phase_list):
             fichier.write("{} {}\n".format(frequency, phase))
             
-        fichier.write(">>>>>>>>>>>>>Fin<<<<<<<<<<<<<<\n")
+        fichier.write(">>>>>>>>>>>>>End<<<<<<<<<<<<<<\n")
 
-      print("Les données ont été ajoutées a {}".format(nom_fichier))
+      print("The data was saved in {}".format(nom_fichier))
       
   except:
-    print("Une erreur est survenue lors de l'écriture du fichier")
-    
+    print("Error while writing the file")
+
+#Asking the user a yes or no question 
 def question_YorN(question):
         reponse_valide = False
         while reponse_valide == False:
@@ -225,49 +209,38 @@ def question_YorN(question):
                 else :
                     return "N"
             else:
-                print("Veuillez répondre Y pour Oui ou N pour Non")
+                print("Answer with Y for yes or N for no")
 
 
 
 
-#------------------------------Sweep---------------------------------
+#------------------------------Main---------------------------------
 
 rm = pyvisa.ResourceManager()
 rm.list_resources()
 
-
-
-#amp=2
-
-#print(gbf.query('*IDN?'))
-#oscillo.write('CHAN1:SCAL {}'.format(amp))
-
-#f=1000
-#amp=1
-#gbf.write('SOUR1:FREQ {}'.format(f))
-#gbf.write('SOUR1:FREQ {}'.format(f))
-
-#oscillo.write('autoset')
-#oscillo.write(':MEASure:SOURce1 CH1')
-
-
-#oscillo = find_port(oscillo_IDN)
-#gbf = find_port(gbf_IDN)
-
+#DEFINE THE INSTRUMENT NAME
+#///////////////////////////////////////////////////////////////////
 oscillo_IDN = "GW,GDS"
 gbf_IDN = "Rigol"
+#///////////////////////////////////////////////////////////////////
 
+#Finding the location of the specified instruments
 oscillo=rm.open_resource(find_port(oscillo_IDN))
 gbf=rm.open_resource(find_port(gbf_IDN))
 
+#Asking the user for the frequency range and output voltage 
 freq_min=float(input("Minimal frequency : "))
 freq_max=float(input("Maximal frequency : "))
 amplitude =float(input("Output voltage : "))
 
-
+#Retrieving the the gain and phase lists for the specified range
 freq_list, gain_list, phase_list = gain_list(freq_min,freq_max,amplitude)
 
+#Saving the data 
 save_file(freq_list, gain_list, phase_list)
+
+#Plotting the Bode plot
 plt.plot(freq_list, gain_list, marker='o', linestyle='-', color='b')
 plt.xscale('log')
 plt.xlabel('Fréquence (Hz)')
@@ -276,9 +249,9 @@ plt.title('Réponse en fréquence')
 plt.grid(True, which='both', linestyle='--')
 plt.show()
 
-#oscillo.close()    
-#gbf.close()
 rm.close()
+
+#----------------------------------------------------------------
 
 
 
